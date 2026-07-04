@@ -1,0 +1,905 @@
+openapi: 3.0.3
+info:
+  title: Travel Social Network REST API
+  version: 1.0.0
+  description: REST API для функциональных требований социальной сети путешественников.
+
+servers:
+  - url: https://api.travel-social.example.com/v1
+
+tags:
+  - name: Photos
+    description: Загрузка и удаление фотографий для сущностей
+  - name: Profiles
+    description: Просмотр и редактирование профиля путешественника
+  - name: Posts
+    description: Посты путешественников
+  - name: Post reactions
+    description: Реакции (лайк/дизлайк) и комментарии к постам
+  - name: Subscriptions
+    description: Подписки на путешественников
+  - name: Places
+    description: Популярные места и посты по местам
+  - name: Feeds
+    description: Ленты в обратном хронологическом порядке
+
+paths:
+  /photos/{type}:
+    post:
+      tags:
+        - Photos
+      summary: Загрузить фотографию
+      description: Загружает фотографию для указанного типа сущности (например, posts или profiles).
+      parameters:
+        - $ref: '#/components/parameters/PhotoType'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - authorId
+                - photo
+              properties:
+                authorId:
+                  type: integer
+                  minimum: 1
+                  example: 1001
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Фотография загружена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Photo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /photos/{type}/{photoId}:
+    delete:
+      tags:
+        - Photos
+      summary: Удалить фотографию
+      parameters:
+        - $ref: '#/components/parameters/PhotoType'
+        - $ref: '#/components/parameters/PhotoId'
+      responses:
+        '204':
+          description: Фотография удалена
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /travelers/{travelerId}:
+    get:
+      tags:
+        - Profiles
+      summary: Посмотреть профиль путешественника
+      parameters:
+        - $ref: '#/components/parameters/TravelerId'
+      responses:
+        '200':
+          description: Профиль найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Traveler'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+        - Profiles
+      summary: Отредактировать свой профиль
+      description: Обновляет информацию о себе и аватар. Профиль создается автоматически при первом входе (JIT).
+      parameters:
+        - $ref: '#/components/parameters/TravelerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTravelerRequest'
+      responses:
+        '200':
+          description: Профиль обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Traveler'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Profiles
+      summary: Удалить свой профиль
+      description: Удаляет профиль. Контент сохраняется анонимизированным как "Удаленный пользователь".
+      parameters:
+        - $ref: '#/components/parameters/TravelerId'
+      responses:
+        '204':
+          description: Профиль удален
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts:
+    get:
+      tags:
+        - Posts
+      summary: Получить посты
+      description: Возвращает посты в обратном хронологическом порядке с фильтрацией по месту или автору.
+      parameters:
+        - name: placeId
+          in: query
+          required: false
+          description: Фильтр по месту путешествия.
+          schema:
+            type: integer
+            minimum: 1
+        - name: authorId
+          in: query
+          required: false
+          description: Фильтр по автору (посты конкретного путешественника).
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Посты в обратном хронологическом порядке
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Post'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Posts
+      summary: Опубликовать пост из путешествия
+      description: Создает пост с ранее загруженными фотографиями, описанием и привязкой к месту путешествия.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+      responses:
+        '201':
+          description: Пост создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/{postId}:
+    get:
+      tags:
+        - Posts
+      summary: Получить пост
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: Пост найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+        - Posts
+      summary: Отредактировать пост
+      description: Обновляет описание, место или список ранее загруженных фотографий поста.
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePostRequest'
+      responses:
+        '200':
+          description: Пост обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Posts
+      summary: Удалить пост
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '204':
+          description: Пост удален
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/{postId}/reactions/{userId}:
+    put:
+      tags:
+        - Post reactions
+      summary: Поставить или изменить реакцию (лайк/дизлайк)
+      description: Идемпотентно создает или заменяет реакцию пользователя на пост.
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '204':
+          description: Реакция сохранена
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Post reactions
+      summary: Убрать реакцию с поста
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: Реакция удалена
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/{postId}/comments:
+    get:
+      tags:
+        - Post reactions
+      summary: Получить комментарии к посту
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Список комментариев к посту
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PostComment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Post reactions
+      summary: Добавить комментарий к посту
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '201':
+          description: Комментарий создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostComment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/{postId}/comments/{commentId}:
+    patch:
+      tags:
+        - Post reactions
+      summary: Отредактировать комментарий
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/CommentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommentRequest'
+      responses:
+        '200':
+          description: Комментарий обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostComment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Post reactions
+      summary: Удалить комментарий к посту
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/CommentId'
+      responses:
+        '204':
+          description: Комментарий удален
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /travelers/{travelerId}/subscriptions/{targetTravelerId}:
+    put:
+      tags:
+        - Subscriptions
+      summary: Подписаться на путешественника
+      description: Идемпотентно создает подписку подписчика на целевого путешественника.
+      parameters:
+        - name: travelerId
+          in: path
+          required: true
+          description: Идентификатор подписчика.
+          schema:
+            type: integer
+            minimum: 1
+        - name: targetTravelerId
+          in: path
+          required: true
+          description: Идентификатор путешественника, на которого оформляется подписка.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: Подписка создана
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Subscriptions
+      summary: Отписаться от путешественника
+      parameters:
+        - name: travelerId
+          in: path
+          required: true
+          description: Идентификатор подписчика.
+          schema:
+            type: integer
+            minimum: 1
+        - name: targetTravelerId
+          in: path
+          required: true
+          description: Идентификатор путешественника, от которого выполняется отписка.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '204':
+          description: Подписка удалена
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /places:
+    get:
+      tags:
+        - Places
+      summary: Найти популярные места для путешествий
+      parameters:
+        - name: query
+          in: query
+          required: false
+          description: Строка поиска по названию, стране или описанию места.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Популярные места
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Place'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /travelers/{travelerId}/feed:
+    get:
+      tags:
+        - Feeds
+      summary: Посмотреть ленту по подпискам
+      description: Возвращает посты по подпискам путешественника в обратном хронологическом порядке (персонализированная агрегация).
+      parameters:
+        - $ref: '#/components/parameters/TravelerId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Лента в обратном хронологическом порядке
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Post'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    TravelerId:
+      name: travelerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    PostId:
+      name: postId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    PhotoType:
+      name: type
+      in: path
+      required: true
+      description: Тип сущности, для которой загружается фотография.
+      schema:
+        type: string
+        enum:
+          - posts
+          - profiles
+    PhotoId:
+      name: photoId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Непрозрачный курсор для постраничной загрузки (возвращается в nextCursor).
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Ошибка валидации
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Traveler:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          example: 1001
+        name:
+          type: string
+          maxLength: 64
+          example: Иван Путешественник
+        bio:
+          type: string
+          maxLength: 256
+          example: Люблю горы и длинные маршруты.
+        avatar:
+          $ref: '#/components/schemas/Photo'
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateTravelerRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          example: Иван Путешественник
+        bio:
+          type: string
+          maxLength: 256
+          example: Люблю горы и длинные маршруты.
+        avatarPhotoId:
+          type: integer
+          minimum: 1
+          example: 7050
+
+    CreatePostRequest:
+      type: object
+      required:
+        - authorId
+        - placeId
+        - description
+        - photoIds
+      properties:
+        authorId:
+          type: integer
+          minimum: 1
+          example: 1001
+        placeId:
+          type: integer
+          minimum: 1
+          example: 501
+        description:
+          type: string
+          maxLength: 2000
+          example: Небольшая прогулка по ущелью и вид на закат.
+        photoIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+          example:
+            - 7001
+            - 7002
+
+    UpdatePostRequest:
+      type: object
+      minProperties: 1
+      properties:
+        placeId:
+          type: integer
+          minimum: 1
+          example: 501
+        description:
+          type: string
+          maxLength: 2000
+          example: Небольшая прогулка по ущелью и вид на закат.
+        photoIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+          example:
+            - 7001
+            - 7002
+
+    CursorPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items: {}
+        nextCursor:
+          type: string
+          nullable: true
+          description: Непрозрачный курсор следующей страницы; null, если страниц больше нет.
+          example: eyJpZCI6MzAwMX0=
+
+    Post:
+      type: object
+      required:
+        - id
+        - authorId
+        - placeId
+        - description
+        - photos
+        - likesCount
+        - dislikesCount
+        - commentsCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          example: 3001
+        authorId:
+          type: integer
+          minimum: 1
+          example: 1001
+        placeId:
+          type: integer
+          minimum: 1
+          example: 501
+        description:
+          type: string
+          maxLength: 2000
+          example: Небольшая прогулка по ущелью и вид на закат.
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Photo'
+        likesCount:
+          type: integer
+          minimum: 0
+          example: 42
+        dislikesCount:
+          type: integer
+          minimum: 0
+          example: 3
+        commentsCount:
+          type: integer
+          minimum: 0
+          example: 7
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Photo:
+      type: object
+      required:
+        - id
+        - url
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          example: 7001
+        url:
+          type: string
+          format: uri
+          example: https://cdn.travel-social.example.com/photos/7001.jpg
+
+    ReactionRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - like
+            - dislike
+          example: like
+
+    PostComment:
+      type: object
+      required:
+        - id
+        - postId
+        - authorId
+        - text
+        - createdAt
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          example: 4001
+        postId:
+          type: integer
+          minimum: 1
+          example: 3001
+        authorId:
+          type: integer
+          minimum: 1
+          example: 1002
+        text:
+          type: string
+          maxLength: 1000
+          example: Очень красивое место!
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateCommentRequest:
+      type: object
+      required:
+        - authorId
+        - text
+      properties:
+        authorId:
+          type: integer
+          minimum: 1
+          example: 1002
+        text:
+          type: string
+          maxLength: 1000
+          example: Очень красивое место!
+
+    UpdateCommentRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          example: Очень красивое место! (обновлено)
+
+    Place:
+      type: object
+      required:
+        - id
+        - name
+        - country
+        - description
+        - postsCount
+        - createdAt
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          example: 501
+        name:
+          type: string
+          maxLength: 64
+          example: Чарынский каньон
+        country:
+          type: string
+          maxLength: 64
+          example: Казахстан
+        description:
+          type: string
+          maxLength: 256
+          example: Популярное место для поездок и фотопрогулок.
+        postsCount:
+          type: integer
+          minimum: 0
+          example: 12842
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: validation_error
+        message:
+          type: string
+          example: Некорректные параметры запроса.
