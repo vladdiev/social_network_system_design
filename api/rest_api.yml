@@ -20,8 +20,6 @@ tags:
     description: Подписки на путешественников
   - name: Places
     description: Популярные места и посты по местам
-  - name: Feeds
-    description: Ленты в обратном хронологическом порядке
 
 paths:
   /photos/{type}:
@@ -143,7 +141,7 @@ paths:
       tags:
         - Posts
       summary: Получить посты
-      description: Возвращает посты в обратном хронологическом порядке с фильтрацией по месту или автору.
+      description: Возвращает посты в обратном хронологическом порядке с фильтрацией по месту, автору или подпискам путешественника.
       parameters:
         - name: placeId
           in: query
@@ -156,6 +154,13 @@ paths:
           in: query
           required: false
           description: Фильтр по автору (посты конкретного путешественника).
+          schema:
+            type: integer
+            minimum: 1
+        - name: subscriberId
+          in: query
+          required: false
+          description: 'Лента по подпискам: посты авторов, на которых подписан указанный путешественник.'
           schema:
             type: integer
             minimum: 1
@@ -259,6 +264,44 @@ paths:
           description: Пост удален
         '404':
           $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /posts/{postId}/reactions:
+    get:
+      tags:
+        - Post reactions
+      summary: Получить реакции на пост
+      description: Возвращает список реакций (кто поставил лайк/дизлайк) с пагинацией. Агрегированные счётчики доступны в самом посте (likesCount/dislikesCount).
+      parameters:
+        - $ref: '#/components/parameters/PostId'
+        - name: type
+          in: query
+          required: false
+          description: Фильтр по типу реакции.
+          schema:
+            type: string
+            enum: [like, dislike]
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Реакции в обратном хронологическом порядке
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Reaction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -483,37 +526,6 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/Place'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /travelers/{travelerId}/feed:
-    get:
-      tags:
-        - Feeds
-      summary: Посмотреть ленту по подпискам
-      description: Возвращает посты по подпискам путешественника в обратном хронологическом порядке (персонализированная агрегация).
-      parameters:
-        - $ref: '#/components/parameters/TravelerId'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Лента в обратном хронологическом порядке
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/CursorPage'
-                  - type: object
-                    properties:
-                      items:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Post'
-        '404':
-          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
         '500':
@@ -791,17 +803,37 @@ components:
           format: uri
           example: https://cdn.travel-social.example.com/photos/7001.jpg
 
+    ReactionType:
+      type: string
+      enum:
+        - like
+        - dislike
+      example: like
+
     ReactionRequest:
       type: object
       required:
         - type
       properties:
         type:
+          $ref: '#/components/schemas/ReactionType'
+
+    Reaction:
+      type: object
+      required:
+        - userId
+        - type
+        - createdAt
+      properties:
+        userId:
+          type: integer
+          minimum: 1
+          example: 1001
+        type:
+          $ref: '#/components/schemas/ReactionType'
+        createdAt:
           type: string
-          enum:
-            - like
-            - dislike
-          example: like
+          format: date-time
 
     PostComment:
       type: object
