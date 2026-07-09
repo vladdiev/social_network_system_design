@@ -1,0 +1,107 @@
+Project postgres {
+  database_type: 'PostgreSQL'
+  Note: 'Используется как модель для записи (source of truth)'
+}
+
+Enum reaction_type {
+  like
+  dislike
+}
+
+Table travelers {
+  id bigint [pk]
+  display_name varchar(64) [not null]
+  bio varchar(256)
+  avatar_url varchar(512)
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
+Table places {
+  id bigint [pk]
+  name varchar(64) [not null]
+  country varchar(64) [not null]
+  description varchar(256) [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
+Table posts {
+  id bigint [pk]
+  author_id bigint [not null]
+  place_id bigint [not null]
+  description varchar(2000) [not null]
+  like_count bigint [not null]
+  dislike_count bigint [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    author_id [name: 'idx_posts_author_id', type: btree]
+    place_id [name: 'idx_posts_place_id', type: btree]
+  }
+}
+
+Table photos {
+  id bigint [pk]
+  post_id bigint
+  url varchar(512) [not null]
+  sort_order int [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    post_id [name: 'idx_photos_post_id', type: btree]
+  }
+}
+
+Table comments {
+  id bigint [pk]
+  post_id bigint [not null]
+  parent_id bigint
+  author_id bigint [not null]
+  text varchar(1000) [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    post_id [name: 'idx_comments_post_id', type: btree]
+    parent_id [name: 'idx_comments_parent_id', type: btree]
+    author_id [name: 'idx_comments_author_id', type: btree]
+  }
+}
+
+Table post_reactions {
+  post_id bigint [not null]
+  user_id bigint [not null]
+  type reaction_type [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (post_id, user_id) [pk]
+    (user_id, created_at) [name: 'idx_post_reactions_user']
+  }
+}
+
+Table subscriptions {
+  id bigint [pk]
+  follower_id bigint [not null]
+  following_id bigint [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (follower_id, following_id) [unique, name: 'uq_subscriptions_pair']
+    follower_id [name: 'idx_subscriptions_follower_id', type: btree]
+    following_id [name: 'idx_subscriptions_following_id', type: btree]
+  }
+}
+
+Ref: posts.author_id > travelers.id
+Ref: posts.place_id > places.id
+Ref: photos.post_id > posts.id
+Ref: comments.post_id > posts.id
+Ref: comments.parent_id > comments.id
+Ref: comments.author_id > travelers.id
+Ref: post_reactions.post_id > posts.id
+Ref: post_reactions.user_id > travelers.id
+Ref: subscriptions.follower_id > travelers.id
+Ref: subscriptions.following_id > travelers.id

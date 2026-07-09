@@ -1,0 +1,29 @@
+Project elasticsearch {
+  database_type: 'Elasticsearch'
+  Note: 'Используется как поисковый движок'
+}
+
+Table post_search_documents {
+  id bigint [pk]
+  author_id bigint [not null]
+  author_name varchar(64) [not null]
+  place_id bigint [not null]
+  place_name varchar(64) [not null]
+  place_country varchar(64) [not null]
+  description text [not null]
+  photos json
+  search_text text [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
+Table place_search_documents {
+  id bigint [pk]
+  name varchar(64) [not null]
+  country varchar(64) [not null]
+  description text [not null]
+  posts_count bigint [not null]
+  search_text text [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}

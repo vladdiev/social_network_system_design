@@ -1,0 +1,53 @@
+Project redis {
+  database_type: 'Redis'
+  Note: 'Кэш горячего подмножества поверх PostgreSQL (cache-aside, allkeys-lru)'
+}
+
+Enum feed_type {
+  traveler
+  subscriptions
+}
+
+Table post_reaction_counters {
+  post_id bigint [pk]
+  like_count bigint [not null]
+  dislike_count bigint [not null]
+  updated_at timestamp [not null]
+}
+
+Table post_read_models {
+  post_id bigint [pk]
+  author_id bigint [not null]
+  author_name varchar(64) [not null]
+  place_id bigint [not null]
+  place_name varchar(64) [not null]
+  place_country varchar(64) [not null]
+  description varchar(2000) [not null]
+  photos json
+  like_count bigint [not null]
+  dislike_count bigint [not null]
+  comments_count bigint [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
+Table traveler_feed_read_models {
+  cache_key varchar(128) [pk]
+  traveler_id bigint [not null]
+  type feed_type [not null]
+  post_ids json [not null]
+  next_cursor bigint
+  updated_at timestamp [not null]
+
+  Note: 'cache_key пример: traveler_feed:{traveler_id}:{type}'
+}
+
+Table place_posts_read_models {
+  cache_key varchar(128) [pk]
+  place_id bigint [not null]
+  post_ids json [not null]
+  next_cursor bigint
+  updated_at timestamp [not null]
+
+  Note: 'cache_key пример: place_posts:{place_id}'
+}
