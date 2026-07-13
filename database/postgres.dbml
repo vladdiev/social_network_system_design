@@ -29,7 +29,9 @@ Table places {
 Table posts {
   id bigint [pk]
   author_id bigint [not null]
-  place_id bigint [not null]
+  latitude numeric(9,6) [not null]
+  longitude numeric(9,6) [not null]
+  place_id bigint
   description varchar(2000) [not null]
   like_count bigint [not null]
   dislike_count bigint [not null]

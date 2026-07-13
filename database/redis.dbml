@@ -8,20 +8,15 @@ Enum feed_type {
   subscriptions
 }
 
-Table post_reaction_counters {
-  post_id bigint [pk]
-  like_count bigint [not null]
-  dislike_count bigint [not null]
-  updated_at timestamp [not null]
-}
-
 Table post_read_models {
   post_id bigint [pk]
   author_id bigint [not null]
   author_name varchar(64) [not null]
-  place_id bigint [not null]
-  place_name varchar(64) [not null]
-  place_country varchar(64) [not null]
+  latitude numeric(9,6) [not null]
+  longitude numeric(9,6) [not null]
+  place_id bigint
+  place_name varchar(64)
+  place_country varchar(64)
   description varchar(2000) [not null]
   photos json
   like_count bigint [not null]
@@ -29,6 +24,8 @@ Table post_read_models {
   comments_count bigint [not null]
   created_at timestamp [not null]
   updated_at timestamp [not null]
+
+  Note: 'Снапшот горячего поста для лент. Счетчики like/dislike/comments денормализованы. На лайк счетчик инкрементится в Redis (write-behind: posts.like_count флашится в PostgreSQL фоново, eventual consistency), снапшот инвалидируется только при редактировании поста, не на каждый лайк. Истина факта лайка и счетчика в PostgreSQL, кэш восстановим.'
 }
 
 Table traveler_feed_read_models {
@@ -39,7 +36,7 @@ Table traveler_feed_read_models {
   next_cursor bigint
   updated_at timestamp [not null]
 
-  Note: 'cache_key пример: traveler_feed:{traveler_id}:{type}'
+  Note: 'Предрассчитанная лента по подпискам или автору. Физически Redis Sorted Set: score = created_at, member = post_id (де-дупликация, пагинация по диапазону). cache_key: traveler_feed:{traveler_id}:{type}. Rebuild из PostgreSQL.'
 }
 
 Table place_posts_read_models {
@@ -49,5 +46,5 @@ Table place_posts_read_models {
   next_cursor bigint
   updated_at timestamp [not null]
 
-  Note: 'cache_key пример: place_posts:{place_id}'
+  Note: 'Предрассчитанный список постов места. Физически Redis Sorted Set: score = created_at, member = post_id. cache_key: place_posts:{place_id}. Rebuild из PostgreSQL.'
 }
