@@ -1,6 +1,6 @@
 Project redis {
   database_type: 'Redis'
-  Note: 'Кэш горячего подмножества поверх PostgreSQL (cache-aside, allkeys-lru)'
+  Note: 'Кэш горячего подмножества поверх PostgreSQL (cache-aside, allkeys-lru). Репликация: Sentinel master-slave, RF 2. Шардирование не используется.'
 }
 
 Enum feed_type {

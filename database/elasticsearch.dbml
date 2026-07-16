@@ -1,6 +1,6 @@
 Project elasticsearch {
   database_type: 'Elasticsearch'
-  Note: 'Используется как поисковый движок'
+  Note: 'Используется как поисковый движок. Репликация: primary-replica, RF 2. Шардирование: индекс делится на shards штатно, application-level шардирование не добавляем.'
 }
 
 Table post_search_documents {
