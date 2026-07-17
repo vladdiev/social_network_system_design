@@ -1,6 +1,6 @@
 Project postgres {
   database_type: 'PostgreSQL'
-  Note: 'Используется как модель для записи (source of truth)'
+  Note: 'Используется как модель для записи (source of truth). Репликация: master-slave, async, RF 3. Шардирование не используется (объем и запись малы). Охлаждение: posts/comments партиционируем по created_at, старые партиции на HDD.'
 }
 
 Enum reaction_type {
