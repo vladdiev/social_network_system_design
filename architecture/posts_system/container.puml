@@ -1,0 +1,37 @@
+@startuml posts_system
+!include <C4/C4_Container>
+
+Person(traveler, "Путешественник", "Публикует посты и читает ленту")
+Container(apiGateway, "API Gateway", "", "Единая точка входа: маршрутизация, аутентификация, rate limiting, балансировка")
+ContainerQueue(kafka, "Events Queue", "Kafka", "Шина событий: посты (от Post Write), подписки/комментарии/реакции (от Social), изменения профилей (от Profiles)")
+System(mediaSystem, "Media", "Хранит фотографии и их метаданные, выдает photo_id и CDN-ссылки")
+
+System_Boundary(postsSystem, "Posts & Feed") {
+    Container(postWrite, "Post Write Service", "", "Принимает посты с привязкой к месту и photo_id уже загруженных фото (pre-upload), валидирует, сохраняет в Posts DB и публикует события после commit")
+    Container(postRead, "Post Read Service", "", "Отдает ленту по подпискам (обратный хронологический порядок) и посты по местам — тонкий читатель read-моделей, посты блогеров подмешивает на чтении (pull)")
+    Container(feedBuilder, "Feed Builder", "", "Kafka consumer: при публикации поста заранее раскладывает его в ленты подписчиков (посты блогеров не раскладываются — их подмешивает Post Read при чтении), делает INCR счетчиков реакций/комментариев в Redis, пачками флашит их в Posts DB и применяет события сверки счетчиков от Social")
+    Container(searchIndexer, "Search Indexer", "", "Kafka consumer: идемпотентный upsert документов постов и мест в Elasticsearch")
+    ContainerDb(postsDb, "Posts DB", "PostgreSQL", "Мастер-хранилище постов, справочника мест и привязок фото (post_photos)")
+    ContainerDb(feedCache, "Feed Cache", "Redis", "Предрассчитанные ленты, снапшоты постов и счетчики, денормализованные имя/аватар автора")
+    ContainerDb(postsSearch, "Posts Search", "Elasticsearch", "Полнотекстовый индекс постов и мест")
+}
+
+Rel(traveler, apiGateway, "Работа с постами и лентой", "REST/HTTPS")
+Rel(apiGateway, postWrite, "POST /posts, PATCH/DELETE /posts/{postId}", "REST")
+Rel(apiGateway, postRead, "GET /posts (лента по subscriberId), GET /posts/{postId}, GET /places", "REST")
+
+Rel(postWrite, postsDb, "Сохраняет посты и привязки post_photos")
+Rel(postWrite, mediaSystem, "Валидирует photo_id до commit поста (владелец, статус pending), после commit подтверждает привязку (pending -> attached), повтор идемпотентен")
+Rel(postWrite, kafka, "Публикует события постов после commit", "Async")
+
+Rel(postRead, feedCache, "Читает ленты, снапшоты и счетчики")
+Rel(postRead, postsDb, "Cache-aside: при промахе снапшота перечитывает пост и прогревает Redis")
+Rel(postRead, postsSearch, "Поиск по местам")
+
+Rel(feedBuilder, kafka, "Подписан на события постов, подписок, реакций, комментариев и профилей", "Async")
+Rel(feedBuilder, feedCache, "Пересобирает ленты, INCR счетчиков, обновляет имя/аватар по событиям профиля")
+Rel(feedBuilder, postsDb, "Write-behind флаш счетчиков пачкой")
+
+Rel(searchIndexer, kafka, "Подписан на события постов, мест и профилей", "Async")
+Rel(searchIndexer, postsSearch, "Идемпотентный upsert документов")
+@enduml

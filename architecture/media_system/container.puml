@@ -1,0 +1,25 @@
+@startuml media_system
+!include <C4/C4_Container>
+
+Person(traveler, "Путешественник", "Загружает фото и просматривает их через CDN")
+Container(apiGateway, "API Gateway", "", "Единая точка входа: маршрутизация, аутентификация, rate limiting, балансировка")
+System(postsSystem, "Posts & Feed", "Публикует посты с фотографиями")
+System(profilesSystem, "Profiles", "Задает аватар по avatarPhotoId")
+System_Ext(cdn, "CDN", "Доставляет фотографии пользователям с граничных узлов")
+
+System_Boundary(mediaSystem, "Media") {
+    Container(mediaService, "Media Service", "", "Прием фото до создания поста (pre-upload, two-phase upload), ресайз и оптимизация, заливка в объектное хранилище, выдача photo_id и CDN-ссылок. Фоновый GC непривязанных pending по TTL")
+    ContainerDb(mediaDb, "Media DB", "PostgreSQL", "Метаданные фото: владелец, url, размер, статус pending/attached")
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Объектное хранилище исходников и обработанных изображений — копии на разных хостах, consistent hashing по photo_id")
+}
+
+Rel(traveler, apiGateway, "Загружает фото до публикации поста", "REST/HTTPS")
+Rel(apiGateway, mediaService, "POST /photos/{type}", "REST")
+Rel(postsSystem, mediaService, "Валидирует photo_id до commit поста, после commit подтверждает привязку (pending -> attached), связь post_photos хранится в Posts DB")
+Rel(profilesSystem, mediaService, "Подтверждает привязку avatarPhotoId (pending -> attached), получает CDN-ссылку")
+
+Rel(mediaService, mediaDb, "Хранит метаданные и статусы фото")
+Rel(mediaService, objectStorage, "Сохраняет файлы", "S3 API")
+Rel(cdn, objectStorage, "Забирает файлы при cache miss (origin pull)", "S3 API")
+Rel(traveler, cdn, "Скачивает фото", "HTTPS")
+@enduml

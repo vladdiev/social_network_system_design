@@ -1,6 +1,6 @@
 Project redis {
   database_type: 'Redis'
-  Note: 'Кэш горячего подмножества поверх PostgreSQL (cache-aside, allkeys-lru). Репликация: Sentinel master-slave, RF 2. Шардирование не используется.'
+  Note: 'Read-модели Posts & Feed. Снапшоты постов — cache-aside при промахе (перечитываются из Posts DB), ленты — event-driven проекции, обновляет Feed Builder по событиям из Kafka. Вытеснение allkeys-lru. Репликация: Sentinel master-slave, RF 2. Шардирование не используется.'
 }
 
 Enum feed_type {
@@ -11,7 +11,8 @@ Enum feed_type {
 Table post_read_models {
   post_id bigint [pk]
   author_id bigint [not null]
-  author_name varchar(64) [not null]
+  author_name varchar(64) [not null, note: 'денормализация из Profiles DB, обновляется по событию ProfileUpdated']
+  author_avatar_url varchar(512) [note: 'денормализация из Profiles DB, обновляется по событию ProfileUpdated']
   latitude numeric(9,6) [not null]
   longitude numeric(9,6) [not null]
   place_id bigint
@@ -25,7 +26,7 @@ Table post_read_models {
   created_at timestamp [not null]
   updated_at timestamp [not null]
 
-  Note: 'Снапшот горячего поста для лент. Счетчики like/dislike/comments денормализованы. На лайк счетчик инкрементится в Redis (write-behind: posts.like_count флашится в PostgreSQL фоново, eventual consistency), снапшот инвалидируется только при редактировании поста, не на каждый лайк. Истина факта лайка и счетчика в PostgreSQL, кэш восстановим.'
+  Note: 'Снапшот горячего поста для лент. Счетчики like/dislike/comments денормализованы. На событие реакции из Social (через Kafka) Feed Builder делает INCR счетчика в Redis (write-behind: счетчики флашатся в Posts DB фоново пачкой, eventual consistency). Снапшот инвалидируется только при редактировании поста, не на каждый лайк. Истина факта лайка — post_reactions в Social DB, расхождения исправляет событие сверки от Social. Имя/аватар автора обновляются по событию ProfileUpdated.'
 }
 
 Table traveler_feed_read_models {
@@ -36,7 +37,7 @@ Table traveler_feed_read_models {
   next_cursor bigint
   updated_at timestamp [not null]
 
-  Note: 'Предрассчитанная лента по подпискам или автору. Физически Redis Sorted Set: score = created_at, member = post_id (де-дупликация, пагинация по диапазону). cache_key: traveler_feed:{traveler_id}:{type}. Rebuild из PostgreSQL.'
+  Note: 'Предрассчитанная лента по подпискам или автору. Физически Redis Sorted Set: score = created_at, member = post_id (де-дупликация, пагинация по диапазону). cache_key: traveler_feed:{traveler_id}:{type}. Обновляет Feed Builder по событиям из Kafka: новые посты заранее раскладываются в ленты подписчиков, посты блогеров выше порога подписчиков не раскладываются — их подмешивает Post Read при чтении. При потере кэша ленты временно собираются по pull-пути и прогреваются заново по мере новых событий.'
 }
 
 Table place_posts_read_models {
@@ -46,5 +47,5 @@ Table place_posts_read_models {
   next_cursor bigint
   updated_at timestamp [not null]
 
-  Note: 'Предрассчитанный список постов места. Физически Redis Sorted Set: score = created_at, member = post_id. cache_key: place_posts:{place_id}. Rebuild из PostgreSQL.'
+  Note: 'Предрассчитанный список постов места. Физически Redis Sorted Set: score = created_at, member = post_id. cache_key: place_posts:{place_id}. Обновляет Feed Builder по событиям постов. Восстановим перечитыванием из Posts DB.'
 }

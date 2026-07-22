@@ -1,0 +1,63 @@
+Project social {
+  database_type: 'PostgreSQL'
+  Note: 'Social DB — база подсистемы Social, общая для сервисов Subscribe и Reviews (database-per-bounded-context). Истина фактов взаимодействий: подписки, комментарии, реакции. Физически на общем PostgreSQL-кластере (master-slave, async, RF 3). Чтение комментариев — с async-реплик, запись на master (read-your-writes: sticky-to-master после своей записи). Охлаждение: comments партиционируем по created_at.'
+}
+
+Enum reaction_type {
+  like
+  dislike
+}
+
+Table comments {
+  id bigint [pk]
+  post_id bigint [not null, note: 'логическая ссылка на posts.id (Posts DB)']
+  parent_id bigint
+  author_id bigint [not null, note: 'логическая ссылка на travelers.id (Profiles DB)']
+  text varchar(1000) [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    (post_id, created_at) [name: 'idx_comments_post_created', type: btree, note: 'составной — под keyset-cursor пагинацию комментариев поста']
+    parent_id [name: 'idx_comments_parent_id', type: btree]
+    author_id [name: 'idx_comments_author_id', type: btree]
+  }
+}
+
+Table post_reactions {
+  post_id bigint [not null, note: 'логическая ссылка на posts.id (Posts DB)']
+  user_id bigint [not null, note: 'логическая ссылка на travelers.id (Profiles DB)']
+  type reaction_type [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (post_id, user_id) [pk]
+    (user_id, created_at) [name: 'idx_post_reactions_user']
+  }
+
+  Note: 'Истина факта лайка/дизлайка (одна реакция на пост от пользователя). События реакций публикуются в Kafka после commit — счетчики в Posts DB/Redis обновляет Feed Builder. Social как владелец периодически публикует событие сверки с актуальным значением счетчика (COUNT считает владелец) — им исправляются расхождения денормализованных копий.'
+}
+
+Table traveler_profiles {
+  traveler_id bigint [pk, note: 'логическая ссылка на travelers.id (Profiles DB)']
+  display_name varchar(64) [not null]
+  avatar_url varchar(512)
+  updated_at timestamp [not null]
+
+  Note: 'Локальная реплика имен/аватаров: обновляется по событиям ProfileUpdated/ProfileDeleted из Kafka. Используется для отдачи автора в комментариях и списках подписок без синхронных вызовов в Profiles.'
+}
+
+Table subscriptions {
+  id bigint [pk]
+  follower_id bigint [not null, note: 'логическая ссылка на travelers.id (Profiles DB)']
+  following_id bigint [not null, note: 'логическая ссылка на travelers.id (Profiles DB)']
+  created_at timestamp [not null]
+
+  indexes {
+    (follower_id, following_id) [unique, name: 'uq_subscriptions_pair']
+    follower_id [name: 'idx_subscriptions_follower_id', type: btree]
+    following_id [name: 'idx_subscriptions_following_id', type: btree]
+  }
+}
+
+Ref: comments.parent_id > comments.id

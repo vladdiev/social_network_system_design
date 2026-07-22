@@ -1,0 +1,25 @@
+Project media {
+  database_type: 'PostgreSQL'
+  Note: 'Media DB — метаданные фотографий, владелец Media Service (database-per-bounded-context). Файлы — в MinIO (3 копии на разных хостах, consistent hashing по photo_id), здесь только метаданные. Two-phase upload: фото создается в статусе pending до публикации поста (pre-upload) и переводится в attached при привязке. Непривязанные pending чистит фоновый GC по TTL — TTL заведомо больше окна привязки. Физически на общем PostgreSQL-кластере (master-slave, async, RF 3).'
+}
+
+Enum photo_status {
+  pending
+  attached
+}
+
+Table photos {
+  id bigint [pk]
+  owner_id bigint [not null, note: 'логическая ссылка на travelers.id (Profiles DB) — кто загрузил']
+  url varchar(512) [not null]
+  size int [not null, note: 'байты, лимит 5 МБ из НФТ']
+  status photo_status [not null]
+  created_at timestamp [not null]
+
+  indexes {
+    (status, created_at) [name: 'idx_photos_status_created', note: 'GC непривязанных pending по TTL']
+    owner_id [name: 'idx_photos_owner_id', type: btree]
+  }
+
+  Note: 'Связь фото с постом хранится на стороне Posts DB (post_photos) — Media не знает про домен постов, Posts не знает про lifecycle файлов. Статус attached означает, что на фото ссылается пост или профиль (аватар). Привязка идемпотентна: повторный вызов ничего не меняет. Обратный переход attached -> pending — только detach-вызовом владельца (удаление поста, смена аватара), после чего фото подбирает GC. Удаление через API доступно только для pending.'
+}
