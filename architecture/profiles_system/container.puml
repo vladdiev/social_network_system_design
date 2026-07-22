@@ -1,0 +1,21 @@
+@startuml profiles_system
+!include <C4/C4_Container>
+
+Person(traveler, "Путешественник", "Просматривает и редактирует профили")
+Container(apiGateway, "API Gateway", "", "Единая точка входа: маршрутизация, аутентификация, rate limiting, балансировка")
+ContainerQueue(kafka, "Events Queue", "Kafka", "Шина событий: изменения профилей для обновления денормализованных имени/аватара в read-моделях Posts & Feed и Social")
+
+System(mediaSystem, "Media", "Хранит фотографии, подтверждает привязку avatarPhotoId и выдает CDN-ссылки")
+
+System_Boundary(profilesSystem, "Profiles") {
+    Container(profileService, "Profile Service", "", "Просмотр, редактирование и удаление профиля (анонимизация 'Удаленный пользователь'), публикует ProfileUpdated/ProfileDeleted после commit")
+    ContainerDb(profilesDb, "Profiles DB", "PostgreSQL", "Владелец идентичности: таблица travelers")
+}
+
+Rel(traveler, apiGateway, "Просмотр и редактирование профиля", "REST/HTTPS")
+Rel(apiGateway, profileService, "GET/PATCH/DELETE /travelers/{travelerId}", "REST")
+
+Rel(profileService, profilesDb, "Читает и обновляет профили")
+Rel(profileService, mediaSystem, "Подтверждает привязку avatarPhotoId (pending -> attached), сохраняет CDN-ссылку в avatar_url")
+Rel(profileService, kafka, "Публикует ProfileUpdated / ProfileDeleted после commit", "Async")
+@enduml

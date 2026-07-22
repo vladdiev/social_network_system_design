@@ -1,0 +1,13 @@
+Project profiles {
+  database_type: 'PostgreSQL'
+  Note: 'Profiles DB — база подсистемы Profiles, владелец идентичности пользователя (database-per-bounded-context). Физически на общем PostgreSQL-кластере (master-slave, async, RF 3). При изменении/удалении профиля сервис публикует ProfileUpdated/ProfileDeleted — по этим событиям Posts и Social обновляют денормализованные имя/аватар в read-моделях. Удаление профиля — анонимизация (display_name = "Удаленный пользователь", bio/avatar_url = NULL), контент сохраняется.'
+}
+
+Table travelers {
+  id bigint [pk]
+  display_name varchar(64) [not null]
+  bio varchar(256)
+  avatar_url varchar(512)
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}

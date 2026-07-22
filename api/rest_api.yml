@@ -66,6 +66,7 @@ paths:
       tags:
         - Photos
       summary: Удалить фотографию
+      description: Удаление доступно только для непривязанных фото (статус pending). Отвязка attached-фото выполняется владельцем сущности (пост, профиль) через detach.
       parameters:
         - $ref: '#/components/parameters/PhotoType'
         - $ref: '#/components/parameters/PhotoId'
@@ -668,7 +669,8 @@ components:
       type: object
       required:
         - authorId
-        - placeId
+        - latitude
+        - longitude
         - description
         - photoIds
       properties:
@@ -676,6 +678,18 @@ components:
           type: integer
           minimum: 1
           example: 1001
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 43.585472
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 39.723098
         placeId:
           type: integer
           minimum: 1
@@ -700,6 +714,18 @@ components:
       type: object
       minProperties: 1
       properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 43.585472
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 39.723098
         placeId:
           type: integer
           minimum: 1
@@ -740,7 +766,8 @@ components:
       required:
         - id
         - authorId
-        - placeId
+        - latitude
+        - longitude
         - description
         - photos
         - likesCount
@@ -757,6 +784,28 @@ components:
           type: integer
           minimum: 1
           example: 1001
+        authorName:
+          type: string
+          maxLength: 64
+          description: Денормализованное имя автора из read-модели.
+          example: Иван Петров
+        authorAvatarUrl:
+          type: string
+          maxLength: 512
+          description: Денормализованная ссылка на аватар автора из read-модели.
+          example: https://cdn.travel-social.example.com/avatars/1001.jpg
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 43.585472
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 39.723098
         placeId:
           type: integer
           minimum: 1
@@ -856,6 +905,11 @@ components:
           type: integer
           minimum: 1
           example: 1002
+        authorName:
+          type: string
+          maxLength: 64
+          description: Денормализованное имя автора из локальной реплики профилей.
+          example: Анна Смирнова
         text:
           type: string
           maxLength: 1000

@@ -1,0 +1,24 @@
+@startuml social_system
+!include <C4/C4_Container>
+
+Person(traveler, "Путешественник", "Подписывается, комментирует и ставит оценки")
+Container(apiGateway, "API Gateway", "", "Единая точка входа: маршрутизация, аутентификация, rate limiting, балансировка")
+ContainerQueue(kafka, "Events Queue", "Kafka", "Шина событий: подписки, комментарии и оценки для пересчета лент и счетчиков в Posts & Feed")
+
+System_Boundary(socialSystem, "Social") {
+    Container(subscribe, "Subscribe Service", "", "Управление подписками/отписками между путешественниками, публикует события после commit")
+    Container(reviews, "Reviews Service", "", "Комментарии и оценки постов: запись на master, чтение комментариев с async-реплик. Чтобы автор сразу видел свой комментарий, несколько секунд после записи его запросы идут на master. События публикует после commit")
+    ContainerDb(socialDb, "Social DB", "PostgreSQL", "Истина подписок, комментариев и реакций. Локальная реплика имен/аватаров (traveler_profiles, по событиям профиля). Чтение комментариев с async-реплик, запись на master")
+}
+
+Rel(traveler, apiGateway, "Подписки, комментарии, оценки", "REST/HTTPS")
+Rel(apiGateway, subscribe, "PUT/DELETE /travelers/{id}/subscriptions/{targetTravelerId}", "REST")
+Rel(apiGateway, reviews, "POST /posts/{id}/comments, PUT/DELETE /posts/{id}/reactions/{userId}", "REST")
+Rel(apiGateway, reviews, "GET /posts/{id}/comments", "REST")
+
+Rel(subscribe, socialDb, "Сохраняет подписки (master)")
+Rel(subscribe, kafka, "Публикует события подписок после commit", "Async")
+
+Rel(reviews, socialDb, "Пишет комментарии и оценки (master), читает комментарии (реплики)")
+Rel(reviews, kafka, "Публикует события комментариев, оценок и периодические события сверки счетчиков. Подписан на ProfileUpdated/ProfileDeleted — обновляет реплику имен", "Async")
+@enduml

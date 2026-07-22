@@ -1,0 +1,51 @@
+Project posts {
+  database_type: 'PostgreSQL'
+  Note: 'Posts DB — база подсистемы Posts & Feed (database-per-bounded-context). Source of truth контента. Логически отдельная БД, физически размещена на общем PostgreSQL-кластере (master-slave, async, RF 3) — см. README, оценка хостов. Охлаждение: posts партиционируем по created_at, старые партиции на HDD.'
+}
+
+Table places {
+  id bigint [pk]
+  name varchar(64) [not null]
+  country varchar(64) [not null]
+  description varchar(256) [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  Note: 'Модерируемый справочник мест (~1M записей).'
+}
+
+Table posts {
+  id bigint [pk]
+  author_id bigint [not null, note: 'логическая ссылка на travelers.id (Profiles DB), FK через границу сервисов не ставим']
+  latitude numeric(9,6) [not null]
+  longitude numeric(9,6) [not null]
+  place_id bigint
+  description varchar(2000) [not null]
+  like_count bigint [not null]
+  dislike_count bigint [not null]
+  comments_count bigint [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+
+  indexes {
+    author_id [name: 'idx_posts_author_id', type: btree]
+    place_id [name: 'idx_posts_place_id', type: btree]
+  }
+
+  Note: 'like_count/dislike_count/comments_count — денормализованные счетчики. Истина — post_reactions и comments в Social DB. Обновляются write-behind флашем Feed Builder по событиям из Kafka (eventual consistency). Расхождения исправляются периодическим событием сверки от Social с актуальным значением счетчика.'
+}
+
+Table post_photos {
+  post_id bigint [not null]
+  photo_id bigint [not null, note: 'логическая ссылка на photos.id (Media DB)']
+  sort_order int [not null]
+
+  indexes {
+    (post_id, photo_id) [pk]
+  }
+
+  Note: 'Связь поста с загруженными фото. Привязка по photo_id при публикации (pre-upload: фото создается в Media DB до поста).'
+}
+
+Ref: posts.place_id > places.id
+Ref: post_photos.post_id > posts.id

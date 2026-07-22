@@ -1,0 +1,24 @@
+@startuml context
+!include <C4/C4_Context>
+
+Person(traveler, "Путешественник", "Пользователь соцсети о путешествиях")
+
+System(postsSystem, "Posts & Feed", "Публикация постов с фото и лента путешествий")
+System(socialSystem, "Social", "Подписки, комментарии и оценки")
+System(mediaSystem, "Media", "Загрузка, обработка и хранение фотографий")
+System(profilesSystem, "Profiles", "Профили пользователей: просмотр, редактирование, удаление (анонимизация)")
+System_Ext(cdn, "CDN", "Доставка фотографий с граничных узлов — основной egress-трафик системы")
+
+Rel(traveler, postsSystem, "Публикует посты, читает ленту и посты мест")
+Rel(traveler, socialSystem, "Подписывается, комментирует, ставит оценки")
+Rel(traveler, profilesSystem, "Просматривает и редактирует профиль")
+Rel(traveler, mediaSystem, "Загружает фото")
+Rel(traveler, cdn, "Скачивает фото", "HTTPS")
+
+Rel(postsSystem, mediaSystem, "Привязывает загруженные фото к постам")
+Rel(socialSystem, postsSystem, "События подписок, комментариев и оценок для лент и счетчиков", "Async")
+Rel(profilesSystem, postsSystem, "События изменения профиля — денормализация имени/аватара в read-моделях", "Async")
+Rel(profilesSystem, socialSystem, "События изменения профиля — локальная реплика имен для комментариев", "Async")
+Rel(profilesSystem, mediaSystem, "Подтверждает привязку avatarPhotoId к профилю")
+Rel(cdn, mediaSystem, "Забирает фото при cache miss (origin pull)")
+@enduml
